@@ -1,6 +1,6 @@
 # LLM-Powered Data Quality Monitoring
 
-An LLM-powered data quality monitoring system that profiles **BigQuery** tables, detects **statistical anomalies**, and uses **GPT-4** to generate plain-English explanations of the issues it finds ‚Äî served through a **FastAPI** API and orchestrated by **Apache Airflow**.
+An LLM-powered data quality monitoring system that profiles **BigQuery** tables, detects **statistical anomalies**, and uses **GPT-4** to generate plain-English explanations of the issues it finds - served through a **FastAPI** API and orchestrated by **Apache Airflow**.
 
 > Built on synthetic / sample data for portfolio demonstration. No real company or customer data.
 
@@ -31,7 +31,7 @@ dags/quality_monitor_dag.py   Airflow DAG: scheduled daily quality run + alertin
 | Module | Responsibility |
 | --- | --- |
 | `src/bigquery_connector.py` | Connects to BigQuery and pulls table data / metadata |
-| `src/data_profiler.py` | Profiles tables ‚Äî null %, uniqueness, ranges, distributions, freshness |
+| `src/data_profiler.py` | Profiles tables - null %, uniqueness, ranges, distributions, freshness |
 | `src/anomaly_detector.py` | Flags statistical anomalies against a rolling baseline |
 | `src/llm_explainer.py` | Sends anomalies to GPT-4 for concise, business-readable explanations |
 | `src/alert_manager.py` | Formats and dispatches data-quality alerts |
@@ -77,4 +77,4 @@ pytest tests/ -v
 
 ## Skills Demonstrated
 
-Python ¬∑ Google BigQuery ¬∑ Data Profiling ¬∑ Statistical Anomaly Detection ¬∑ OpenAI GPT-4 / LLM ¬∑ FastAPI ¬∑ Apache Airflow ¬∑ Docker ¬∑ MLOps ¬∑ Data Quality
+Python | Google BigQuery | Data Profiling | Statistical Anomaly Detection | OpenAI GPT-4 / LLM | FastAPI | Apache Airflow | Docker | MLOps | Data Quality
