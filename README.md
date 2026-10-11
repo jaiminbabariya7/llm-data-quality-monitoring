@@ -13,7 +13,7 @@ BigQuery tables
 data_profiler.py      column stats: nulls, uniqueness, min/max, distributions, freshness
       |
       v
-anomaly_detector.py   statistical anomalies (null rates / IQR outlier fence / volume drift vs. 7-day average / schema changes)
+anomaly_detector.py   statistical anomalies (null rates / z-score + IQR outliers / mean drift / volume drift / schema changes)
       |
       v
 llm_explainer.py      OpenAI (rule-based fallback) -> plain-English "what changed and why it matters"
@@ -31,13 +31,26 @@ dags/quality_monitor_dag.py   Airflow DAG: scheduled daily quality run + alertin
 | Module | Responsibility |
 | --- | --- |
 | `src/bigquery_connector.py` | Connects to BigQuery and pulls table data / metadata |
-| `src/data_profiler.py` | Profiles tables - null %, uniqueness, ranges, distributions, freshness |
-| `src/anomaly_detector.py` | Flags statistical anomalies against a rolling baseline |
+| `src/data_profiler.py` | Profiles tables - null %, uniqueness, ranges, distributions, freshness; saves each profile as the baseline for the next run |
+| `src/anomaly_detector.py` | Runs the checks below against the previous profile and the 7-day row-count history |
 | `src/llm_explainer.py` | Sends anomalies to an OpenAI model for concise, business-readable explanations; falls back to rule-based summaries if the API is unavailable |
 | `src/alert_manager.py` | Formats and dispatches data-quality alerts |
 | `api/main.py`, `api/schemas.py` | FastAPI service + request/response models |
 | `dags/quality_monitor_dag.py` | Airflow DAG that schedules the daily monitoring run |
 | `tests/` | Unit tests for the profiler and anomaly detector |
+
+## Anomaly Checks
+
+| Check | Rule | Severity |
+| --- | --- | --- |
+| Null rate | > 5% warning, > 20% critical | medium / critical |
+| Z-score outlier | column min or max more than 3 standard deviations from the mean | medium |
+| IQR outlier | values outside [Q1 - 1.5 IQR, Q3 + 1.5 IQR] | low |
+| Mean drift | column mean moved more than 3 baseline standard deviations since the previous run | high |
+| Volume drift | row count > 30% below the 7-day average (critical) or > 2x above it (high, possible duplication) | critical / high |
+| Schema change | column added (medium) or removed (critical) since the previous run | medium / critical |
+
+Mean drift and schema checks compare against the previous profile, stored as JSON in `PROFILE_STORE_DIR` (default `profiles/`). On the first run there is no baseline, so those two checks are skipped.
 
 ## Tech Stack
 

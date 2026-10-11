@@ -28,3 +28,6 @@ service-account*.json
 # Models
 models/*.pkl
 models/*.h5
+
+# Stored table profiles (baselines)
+profiles/

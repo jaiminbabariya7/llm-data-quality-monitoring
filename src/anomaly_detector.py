@@ -1,7 +1,8 @@
 """
 Statistical anomaly detection for BigQuery table profiles.
 
-Applies null-rate, IQR outlier, volume drift, and schema-change detection
+Applies null-rate, Z-score, IQR outlier, mean drift, volume drift, and
+schema-change detection
 to flag data quality issues before they reach downstream consumers.
 """
 from __future__ import annotations
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Anomaly:
-    anomaly_type: str       # "null_rate" | "iqr_outlier" | "volume_drift" | "schema_change"
+    anomaly_type: str       # "null_rate" | "zscore" | "iqr_outlier" | "mean_drift" | "volume_drift" | "schema_change"
     column: str | None
     description: str
     severity: str           # "low" | "medium" | "high" | "critical"
@@ -46,6 +47,7 @@ class AnomalyReport:
 class AnomalyDetector:
     """Detect statistical anomalies in BigQuery table profiles."""
 
+    ZSCORE_THRESHOLD   = 3.0    # |z| above this → outlier / drift
     VOLUME_DROP_PCT    = 0.30   # 30% drop → critical
     VOLUME_SPIKE_PCT   = 2.00   # 200% spike → high
     NULL_RATE_WARNING  = 0.05
@@ -81,14 +83,18 @@ class AnomalyDetector:
         # 1. Null rate checks
         anomalies.extend(self._check_null_rates(profile))
 
-        # 2. Numeric IQR outlier fence
+        # 2. Numeric Z-score + IQR outlier fence
         anomalies.extend(self._check_distributions(profile))
 
-        # 3. Volume drift (row count trend)
+        # 3. Mean drift vs. previous profile (Z-score against baseline)
+        if baseline:
+            anomalies.extend(self._check_mean_drift(profile, baseline))
+
+        # 4. Volume drift (row count trend)
         anomalies.extend(self._check_volume_drift(
             profile.dataset, profile.table, profile.row_count, lookback_days))
 
-        # 4. Schema changes
+        # 5. Schema changes
         if baseline:
             anomalies.extend(self._check_schema_changes(profile.schema, baseline.schema))
 
@@ -123,6 +129,17 @@ class AnomalyDetector:
         for col in profile.columns:
             if col.mean is None or col.std is None or col.std == 0:
                 continue
+            # Z-score of the column extremes: how many standard deviations
+            # the min / max sit from the mean.
+            extremes = [v for v in (col.min_val, col.max_val) if v is not None]
+            if extremes:
+                worst = max(extremes, key=lambda v: abs(v - col.mean))
+                z = (worst - col.mean) / col.std
+                if abs(z) > self.ZSCORE_THRESHOLD:
+                    result.append(Anomaly(
+                        anomaly_type="zscore", column=col.name,
+                        description=f"{col.name}: extreme value {worst:.2f} is {abs(z):.1f} standard deviations from the mean {col.mean:.2f}",
+                        severity="medium", metric_value=round(z, 2), threshold=self.ZSCORE_THRESHOLD))
             if col.p75 is not None and col.p25 is not None:
                 iqr = col.p75 - col.p25
                 lower, upper = col.p25 - 1.5 * iqr, col.p75 + 1.5 * iqr
@@ -131,6 +148,25 @@ class AnomalyDetector:
                         anomaly_type="iqr_outlier", column=col.name,
                         description=f"{col.name}: values outside IQR fence [{lower:.2f}, {upper:.2f}] — possible outliers",
                         severity="low", metric_value=col.max_val, threshold=upper))
+        return result
+
+    def _check_mean_drift(self, profile: TableProfile,
+                          baseline: TableProfile) -> list[Anomaly]:
+        """Flag numeric columns whose mean moved more than ZSCORE_THRESHOLD
+        baseline standard deviations since the previous profile."""
+        prev = {c.name: c for c in baseline.columns}
+        result = []
+        for col in profile.columns:
+            base = prev.get(col.name)
+            if (col.mean is None or base is None or base.mean is None
+                    or base.std is None or base.std == 0):
+                continue
+            z = (col.mean - base.mean) / base.std
+            if abs(z) > self.ZSCORE_THRESHOLD:
+                result.append(Anomaly(
+                    anomaly_type="mean_drift", column=col.name,
+                    description=f"{col.name}: mean moved from {base.mean:.2f} to {col.mean:.2f} ({z:+.1f} baseline standard deviations)",
+                    severity="high", metric_value=round(z, 2), threshold=self.ZSCORE_THRESHOLD))
         return result
 
     def _check_volume_drift(self, dataset: str, table: str,

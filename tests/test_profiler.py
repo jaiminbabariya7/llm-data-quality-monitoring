@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),'..'))
 
-from src.data_profiler import DataProfiler, ColumnProfile, TableProfile
+from src.data_profiler import (DataProfiler, ColumnProfile, TableProfile,
+                               save_profile, load_profile)
 
 
 def _make_df(n=500, null_frac=0.0):
@@ -81,6 +82,23 @@ class TestNullFlagging(unittest.TestCase):
         profile = TableProfile(dataset="d", table="t", row_count=500,
                                schema=schema, columns=cols)
         self.assertEqual(profiler.flag_null_issues(profile), [])
+
+
+class TestProfileStore(unittest.TestCase):
+    def test_round_trip_and_first_run(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(load_profile("d", "t", store_dir=d))   # first run: no baseline
+            col = ColumnProfile(name="amount", dtype="FLOAT64", null_rate=0.0,
+                                cardinality=10, mean=50.0, std=10.0)
+            prof = TableProfile(dataset="d", table="t", row_count=5,
+                                schema=[{"name": "amount", "type": "FLOAT64"}],
+                                columns=[col], profiled_at="2026-01-01T00:00:00Z")
+            save_profile(prof, store_dir=d)
+            loaded = load_profile("d", "t", store_dir=d)
+            self.assertEqual(loaded.row_count, 5)
+            self.assertEqual(loaded.columns[0].mean, 50.0)
+            self.assertIsInstance(loaded.columns[0], ColumnProfile)
 
 
 if __name__ == "__main__": unittest.main()

@@ -39,14 +39,16 @@ def _run_quality_check(dataset: str, table: str, **kwargs) -> dict:
     import os, sys
     sys.path.insert(0, "/opt/airflow")
     from src.bigquery_connector import BigQueryConnector
-    from src.data_profiler import DataProfiler
+    from src.data_profiler import DataProfiler, load_profile, save_profile
     from src.anomaly_detector import AnomalyDetector
     from src.llm_explainer import LLMExplainer
     from src.alert_manager import AlertManager
 
     bq        = BigQueryConnector(project_id=os.getenv("GCP_PROJECT_ID"))
     profile   = DataProfiler(connector=bq).profile_table(dataset, table)
-    report    = AnomalyDetector(connector=bq).detect(profile)
+    baseline  = load_profile(dataset, table)          # None on first run
+    report    = AnomalyDetector(connector=bq).detect(profile, baseline=baseline)
+    save_profile(profile)
     explanation = LLMExplainer().explain(report)
 
     if report.has_anomalies:

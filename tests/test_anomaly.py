@@ -97,4 +97,36 @@ class TestAnomalyReport(unittest.TestCase):
         self.assertEqual(r.critical_count, 1)
 
 
+class TestZScoreAndDrift(unittest.TestCase):
+    def setUp(self):
+        mock_bq = MagicMock()
+        mock_bq.get_daily_row_counts.side_effect = Exception("skip")
+        self.detector = AnomalyDetector(connector=mock_bq)
+
+    def test_extreme_value_flagged_by_zscore(self):
+        profile = _make_profile()            # amount: mean 50, std 10, min 5 / max 95 -> |z| = 4.5
+        report  = self.detector.detect(profile)
+        z = [a for a in report.anomalies if a.anomaly_type == "zscore"]
+        self.assertTrue(any(a.column == "amount" and abs(a.metric_value) == 4.5 for a in z))
+
+    def test_values_within_threshold_not_flagged(self):
+        profile = _make_profile()
+        amount = next(c for c in profile.columns if c.name == "amount")
+        amount.min_val, amount.max_val = 25.0, 75.0   # |z| = 2.5
+        report = self.detector.detect(profile)
+        self.assertFalse(any(a.anomaly_type == "zscore" for a in report.anomalies))
+
+    def test_mean_drift_vs_baseline_flagged(self):
+        prev = _make_profile()
+        curr = _make_profile()
+        next(c for c in curr.columns if c.name == "amount").mean = 85.0   # +3.5 baseline std
+        report = self.detector.detect(curr, baseline=prev)
+        drift = [a for a in report.anomalies if a.anomaly_type == "mean_drift"]
+        self.assertTrue(any(a.column == "amount" and a.severity == "high" for a in drift))
+
+    def test_stable_mean_no_drift(self):
+        report = self.detector.detect(_make_profile(), baseline=_make_profile())
+        self.assertFalse(any(a.anomaly_type == "mean_drift" for a in report.anomalies))
+
+
 if __name__ == "__main__": unittest.main()

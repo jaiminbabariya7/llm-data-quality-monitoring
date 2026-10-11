@@ -5,8 +5,9 @@ Computes null rates, cardinality, numeric distributions, and
 schema snapshots — the foundation for anomaly detection.
 """
 from __future__ import annotations
-import logging
-from dataclasses import dataclass, field
+import json, logging, os
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 import numpy as np
 import pandas as pd
@@ -38,6 +39,34 @@ class TableProfile:
     schema: list[dict]
     columns: list[ColumnProfile]
     profiled_at: str = ""
+
+
+# Previous profiles are kept as JSON so each run can compare against the last
+# one (mean drift and schema changes need a baseline).
+PROFILE_STORE_DIR = os.getenv("PROFILE_STORE_DIR", "profiles")
+
+
+def _profile_path(dataset: str, table: str, store_dir: str | None = None) -> Path:
+    return Path(store_dir or PROFILE_STORE_DIR) / f"{dataset}.{table}.json"
+
+
+def save_profile(profile: TableProfile, store_dir: str | None = None) -> Path:
+    """Persist a profile as the baseline for the next run."""
+    path = _profile_path(profile.dataset, profile.table, store_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(profile), default=str, indent=2))
+    return path
+
+
+def load_profile(dataset: str, table: str,
+                 store_dir: str | None = None) -> TableProfile | None:
+    """Load the previous profile for a table, or None on the first run."""
+    path = _profile_path(dataset, table, store_dir)
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    data["columns"] = [ColumnProfile(**c) for c in data["columns"]]
+    return TableProfile(**data)
 
 
 class DataProfiler:

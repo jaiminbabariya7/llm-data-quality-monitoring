@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import MonitorRequest, MonitorResponse, AnomalyDetail, HealthResponse
 from src.bigquery_connector import BigQueryConnector
-from src.data_profiler import DataProfiler
+from src.data_profiler import DataProfiler, load_profile, save_profile
 from src.anomaly_detector import AnomalyDetector
 from src.llm_explainer import LLMExplainer
 from src.alert_manager import AlertManager
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="LLM Data Quality Monitor",
-    description="AI-powered BigQuery data quality monitoring with GPT-4 explanations",
+    description="BigQuery data quality monitoring with OpenAI explanations and a rule-based fallback",
     version="1.0.0",
 )
 
@@ -47,8 +47,11 @@ def run_monitor(req: MonitorRequest):
         # 1. Profile table
         profile = profiler.profile_table(req.dataset, req.table)
 
-        # 2. Detect anomalies
-        report = detector.detect(profile, lookback_days=req.lookback_days)
+        # 2. Detect anomalies against the previous profile, then store this one
+        baseline = load_profile(req.dataset, req.table)
+        report = detector.detect(profile, baseline=baseline,
+                                 lookback_days=req.lookback_days)
+        save_profile(profile)
 
         # 3. Generate LLM explanation
         explanation = explainer.explain(report)
