@@ -12,6 +12,7 @@ from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.exceptions import AirflowFailException
 from airflow.utils.dates import days_ago
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,10 @@ with DAG(
     branch = BranchPythonOperator(task_id="evaluate_results",
                                    python_callable=_check_results)
     mark_passed = EmptyOperator(task_id="mark_passed")
-    mark_failed = EmptyOperator(task_id="mark_failed")
+    def _fail(**_):
+        raise AirflowFailException("Critical data-quality anomalies found; see the alerts")
+
+    mark_failed = PythonOperator(task_id="mark_failed", python_callable=_fail)
     end = EmptyOperator(task_id="end", trigger_rule="none_failed_min_one_success")
 
     start >> quality_tasks >> branch >> [mark_passed, mark_failed] >> end

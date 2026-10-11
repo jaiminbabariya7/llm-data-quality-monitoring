@@ -9,7 +9,8 @@ class MonitorRequest(BaseModel):
     dataset: str    = Field(..., description="BigQuery dataset name")
     table: str      = Field(..., description="Table to monitor")
     lookback_days: int = Field(7, ge=1, le=90, description="Days of history for drift checks")
-    null_rate_threshold: float = Field(0.05, ge=0.0, le=1.0)
+    null_rate_threshold: float = Field(0.05, ge=0.0, le=1.0, description="Null rate that triggers a warning")
+    date_column: str = Field("created_at", description="Date/timestamp column for daily row counts")
 
 
 class AnomalyDetail(BaseModel):

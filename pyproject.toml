@@ -1,15 +1,18 @@
 [build-system]
 requires=["setuptools>=68","wheel"]
-build-backend="setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 [project]
-name="de-reference-project"
+name = "llm-data-quality-monitoring"
 version="1.0.0"
-description="Data engineering reference stack: Airflow + dbt + BigQuery"
+description = "BigQuery data quality monitoring: statistical anomaly detection with LLM explanations and a rule-based fallback"
 readme="README.md"
 license={text="MIT"}
 requires-python=">=3.10"
 authors=[{name="Jaimin Babariya",email="jaiminbabariya7@gmail.com"}]
-keywords=["data-engineering","airflow","dbt","bigquery","etl"]
+keywords = ["data-quality", "bigquery", "anomaly-detection", "llm", "fastapi", "airflow"]
+[tool.setuptools]
+packages = []
+
 [project.optional-dependencies]
 dev=["pytest>=7.4","pytest-cov>=4.1","black>=23.0","flake8>=6.1"]
 [tool.black]

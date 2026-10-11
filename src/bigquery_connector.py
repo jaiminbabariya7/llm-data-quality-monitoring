@@ -45,7 +45,7 @@ class BigQueryConnector:
         sql = f"""
             SELECT DATE({date_col}) AS dt, COUNT(*) AS row_count
             FROM `{self.project_id}.{dataset}.{table}`
-            WHERE {date_col} >= DATE_SUB(CURRENT_DATE(), INTERVAL {lookback_days} DAY)
+            WHERE DATE({date_col}) >= DATE_SUB(CURRENT_DATE(), INTERVAL {lookback_days} DAY)
             GROUP BY dt ORDER BY dt
         """
         return self.query_df(sql)

@@ -41,6 +41,7 @@ def run_monitor(req: MonitorRequest):
         bq        = BigQueryConnector(project_id=req.project_id)
         profiler  = DataProfiler(connector=bq)
         detector  = AnomalyDetector(connector=bq)
+        detector.NULL_RATE_WARNING = req.null_rate_threshold
         explainer = LLMExplainer()
         alerter   = AlertManager(bq_connector=bq)
 
@@ -50,7 +51,7 @@ def run_monitor(req: MonitorRequest):
         # 2. Detect anomalies against the previous profile, then store this one
         baseline = load_profile(req.dataset, req.table)
         report = detector.detect(profile, baseline=baseline,
-                                 lookback_days=req.lookback_days)
+                                 lookback_days=req.lookback_days, date_col=req.date_column)
         save_profile(profile)
 
         # 3. Generate LLM explanation

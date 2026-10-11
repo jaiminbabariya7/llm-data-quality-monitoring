@@ -129,4 +129,29 @@ class TestZScoreAndDrift(unittest.TestCase):
         self.assertFalse(any(a.anomaly_type == "mean_drift" for a in report.anomalies))
 
 
+
+class TestVolumeDrift(unittest.TestCase):
+    def setUp(self):
+        self.detector = AnomalyDetector(connector=MagicMock())
+
+    def _counts(self, values):
+        import pandas as pd
+        return pd.DataFrame({"dt": pd.date_range("2024-01-01", periods=len(values)).date,
+                             "row_count": values})
+
+    def test_drop_flagged_critical(self):
+        out = self.detector.volume_drift_from_counts(self._counts([1000, 1100, 900, 1000, 400]), 7)
+        self.assertEqual([a.severity for a in out], ["critical"])
+
+    def test_spike_flagged_high(self):
+        out = self.detector.volume_drift_from_counts(self._counts([1000, 1000, 1000, 2500]), 7)
+        self.assertEqual([a.severity for a in out], ["high"])
+
+    def test_normal_day_not_flagged(self):
+        self.assertEqual(self.detector.volume_drift_from_counts(self._counts([1000, 980, 1020, 1010]), 7), [])
+
+    def test_not_enough_history(self):
+        self.assertEqual(self.detector.volume_drift_from_counts(self._counts([1000, 10]), 7), [])
+
+
 if __name__ == "__main__": unittest.main()

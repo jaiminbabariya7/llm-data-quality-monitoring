@@ -62,13 +62,15 @@ class AnomalyDetector:
 
     def detect(self, profile: TableProfile,
                baseline: TableProfile | None = None,
-               lookback_days: int = 7) -> AnomalyReport:
+               lookback_days: int = 7,
+               date_col: str = "created_at") -> AnomalyReport:
         """Run all detectors and return a consolidated AnomalyReport.
 
         Args:
             profile: Current table profile.
             baseline: Previous profile for schema-change comparison (optional).
             lookback_days: Days of history for volume drift checks.
+            date_col: Date/timestamp column used to count rows per day.
 
         Returns:
             AnomalyReport with all detected anomalies.
@@ -92,7 +94,7 @@ class AnomalyDetector:
 
         # 4. Volume drift (row count trend)
         anomalies.extend(self._check_volume_drift(
-            profile.dataset, profile.table, profile.row_count, lookback_days))
+            profile.dataset, profile.table, lookback_days, date_col))
 
         # 5. Schema changes
         if baseline:
@@ -170,29 +172,37 @@ class AnomalyDetector:
         return result
 
     def _check_volume_drift(self, dataset: str, table: str,
-                             current_rows: int, lookback_days: int) -> list[Anomaly]:
+                            lookback_days: int, date_col: str) -> list[Anomaly]:
+        """Compare the latest day's row count with the average of the previous days."""
         try:
-            df = self.bq.get_daily_row_counts(dataset, table,
-                                               date_col="created_at",
-                                               lookback_days=lookback_days)
-            if len(df) < 3:
-                return []
-            avg = df["row_count"].mean()
-            if avg == 0:
-                return []
-            ratio = current_rows / avg
-            if ratio < (1 - self.VOLUME_DROP_PCT):
-                return [Anomaly(
-                    anomaly_type="volume_drift", column=None,
-                    description=f"Row count {current_rows:,} is {(1-ratio)*100:.0f}% below {lookback_days}-day average {avg:,.0f}",
-                    severity="critical", metric_value=ratio, threshold=1-self.VOLUME_DROP_PCT)]
-            if ratio > self.VOLUME_SPIKE_PCT:
-                return [Anomaly(
-                    anomaly_type="volume_drift", column=None,
-                    description=f"Row count {current_rows:,} is {ratio:.1f}x above {lookback_days}-day average — possible data duplication",
-                    severity="high", metric_value=ratio, threshold=self.VOLUME_SPIKE_PCT)]
+            df = self.bq.get_daily_row_counts(dataset, table, date_col=date_col,
+                                              lookback_days=lookback_days)
         except Exception as e:
             logger.warning("Volume drift check skipped: %s", e)
+            return []
+        return self.volume_drift_from_counts(df, lookback_days)
+
+    def volume_drift_from_counts(self, df: pd.DataFrame, lookback_days: int) -> list[Anomaly]:
+        """df: one row per day (dt, row_count), oldest first."""
+        if df is None or len(df) < 4:                  # latest day + at least 3 history days
+            return []
+        df = df.sort_values("dt")
+        latest = int(df["row_count"].iloc[-1])
+        avg = float(df["row_count"].iloc[:-1].mean())
+        if avg == 0:
+            return []
+        ratio = latest / avg
+        day = df["dt"].iloc[-1]
+        if ratio < (1 - self.VOLUME_DROP_PCT):
+            return [Anomaly(
+                anomaly_type="volume_drift", column=None,
+                description=f"{day}: {latest:,} rows is {(1-ratio)*100:.0f}% below the previous {len(df)-1}-day average {avg:,.0f}",
+                severity="critical", metric_value=round(ratio, 3), threshold=1-self.VOLUME_DROP_PCT)]
+        if ratio > self.VOLUME_SPIKE_PCT:
+            return [Anomaly(
+                anomaly_type="volume_drift", column=None,
+                description=f"{day}: {latest:,} rows is {ratio:.1f}x the previous {len(df)-1}-day average — possible duplication",
+                severity="high", metric_value=round(ratio, 3), threshold=self.VOLUME_SPIKE_PCT)]
         return []
 
     def _check_schema_changes(self, current: list[dict],
