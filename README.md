@@ -13,7 +13,7 @@ BigQuery tables
 data_profiler.py      column stats: nulls, uniqueness, min/max, distributions, freshness
       |
       v
-anomaly_detector.py   statistical anomalies (z-score / IQR / drift vs. rolling baseline)
+anomaly_detector.py   statistical anomalies (null rates / IQR outlier fence / volume drift vs. 7-day average / schema changes)
       |
       v
 llm_explainer.py      OpenAI (rule-based fallback) -> plain-English "what changed and why it matters"

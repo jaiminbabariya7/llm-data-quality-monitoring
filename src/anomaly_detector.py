@@ -1,7 +1,7 @@
 """
 Statistical anomaly detection for BigQuery table profiles.
 
-Applies Z-score, IQR, volume drift, and schema-change detection
+Applies null-rate, IQR outlier, volume drift, and schema-change detection
 to flag data quality issues before they reach downstream consumers.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Anomaly:
-    anomaly_type: str       # "null_rate" | "zscore" | "volume_drift" | "schema_change"
+    anomaly_type: str       # "null_rate" | "iqr_outlier" | "volume_drift" | "schema_change"
     column: str | None
     description: str
     severity: str           # "low" | "medium" | "high" | "critical"
@@ -46,7 +46,6 @@ class AnomalyReport:
 class AnomalyDetector:
     """Detect statistical anomalies in BigQuery table profiles."""
 
-    ZSCORE_THRESHOLD   = 3.0
     VOLUME_DROP_PCT    = 0.30   # 30% drop → critical
     VOLUME_SPIKE_PCT   = 2.00   # 200% spike → high
     NULL_RATE_WARNING  = 0.05
@@ -82,7 +81,7 @@ class AnomalyDetector:
         # 1. Null rate checks
         anomalies.extend(self._check_null_rates(profile))
 
-        # 2. Numeric Z-score + IQR
+        # 2. Numeric IQR outlier fence
         anomalies.extend(self._check_distributions(profile))
 
         # 3. Volume drift (row count trend)
