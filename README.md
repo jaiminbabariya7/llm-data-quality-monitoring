@@ -1,6 +1,6 @@
 # LLM-Powered Data Quality Monitoring
 
-An LLM-powered data quality monitoring system that profiles **BigQuery** tables, detects **statistical anomalies**, and uses **GPT-4** to generate plain-English explanations of the issues it finds - served through a **FastAPI** API and orchestrated by **Apache Airflow**.
+An LLM-powered data quality monitoring system that profiles **BigQuery** tables, detects **statistical anomalies**, and uses an **OpenAI** model (`gpt-4o-mini` by default, configurable via `LLM_MODEL`) to generate plain-English explanations of the issues it finds - served through a **FastAPI** API and orchestrated by **Apache Airflow**.
 
 > Built on synthetic / sample data for portfolio demonstration. No real company or customer data.
 
@@ -16,7 +16,7 @@ data_profiler.py      column stats: nulls, uniqueness, min/max, distributions, f
 anomaly_detector.py   statistical anomalies (z-score / IQR / drift vs. rolling baseline)
       |
       v
-llm_explainer.py      GPT-4 -> plain-English "what changed and why it matters"
+llm_explainer.py      OpenAI (rule-based fallback) -> plain-English "what changed and why it matters"
       |
       +--> api/main.py        FastAPI service (profile / anomalies / explain / health)
       |
@@ -33,7 +33,7 @@ dags/quality_monitor_dag.py   Airflow DAG: scheduled daily quality run + alertin
 | `src/bigquery_connector.py` | Connects to BigQuery and pulls table data / metadata |
 | `src/data_profiler.py` | Profiles tables - null %, uniqueness, ranges, distributions, freshness |
 | `src/anomaly_detector.py` | Flags statistical anomalies against a rolling baseline |
-| `src/llm_explainer.py` | Sends anomalies to GPT-4 for concise, business-readable explanations |
+| `src/llm_explainer.py` | Sends anomalies to an OpenAI model for concise, business-readable explanations; falls back to rule-based summaries if the API is unavailable |
 | `src/alert_manager.py` | Formats and dispatches data-quality alerts |
 | `api/main.py`, `api/schemas.py` | FastAPI service + request/response models |
 | `dags/quality_monitor_dag.py` | Airflow DAG that schedules the daily monitoring run |
@@ -45,7 +45,7 @@ dags/quality_monitor_dag.py   Airflow DAG: scheduled daily quality run + alertin
 | --- | --- |
 | Language | Python 3.11 |
 | Warehouse | Google BigQuery |
-| LLM | OpenAI GPT-4 |
+| LLM | OpenAI (`gpt-4o-mini` default, configurable) + rule-based fallback |
 | API | FastAPI |
 | Orchestration | Apache Airflow |
 | Packaging | Docker + docker-compose |
@@ -77,4 +77,4 @@ pytest tests/ -v
 
 ## Skills Demonstrated
 
-Python | Google BigQuery | Data Profiling | Statistical Anomaly Detection | OpenAI GPT-4 / LLM | FastAPI | Apache Airflow | Docker | MLOps | Data Quality
+Python | Google BigQuery | Data Profiling | Statistical Anomaly Detection | OpenAI API / LLM | FastAPI | Apache Airflow | Docker | MLOps | Data Quality

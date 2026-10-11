@@ -1,7 +1,7 @@
 """
 LLM-based anomaly explanation and remediation suggestions.
 
-Calls OpenAI GPT-4 (with HuggingFace fallback) to generate
+Calls an OpenAI model (gpt-4o-mini by default, set via LLM_MODEL), with a rule-based fallback, to generate
 plain-English summaries of data quality anomalies and actionable
 remediation steps for the data engineering team.
 """
@@ -35,7 +35,7 @@ def _build_prompt(report: AnomalyReport) -> str:
 
 
 def explain_with_openai(report: AnomalyReport) -> str:
-    """Call OpenAI GPT-4 to explain anomalies in plain English.
+    """Call the configured OpenAI model to explain anomalies in plain English.
 
     Args:
         report: AnomalyReport containing detected anomalies.
